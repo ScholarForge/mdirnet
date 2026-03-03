@@ -1,0 +1,57 @@
+# MDIRNET Configuration
+
+model:
+  name: MDIRNET
+  in_channels: 3
+  patch_size: 64
+  num_patch_groups: 8
+  patches_per_group: 16
+  num_ovpca_iterations: 6
+  dram_min_rank: 4
+  dram_max_rank: 32
+  use_ppm: true
+  use_dram: true
+  use_sam: true
+
+training:
+  batch_size: 4
+  num_epochs: 100
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  scheduler: cosine
+  warmup_epochs: 5
+  
+  loss:
+    lambda_rec: 1.0
+    lambda_unc: 0.1
+    lambda_rank: 0.05
+    alpha_l2: 0.1
+
+data:
+  denoising:
+    datasets: [BSD68, BSD400, WED, DIV2K]
+    noise_levels: [25, 50]
+  
+  deraining:
+    datasets: [Rain100L]
+  
+  deblurring:
+    datasets: [GoPro, GoBlur]
+  
+  augmentation:
+    random_crop: true
+    crop_size: 256
+    random_flip: true
+    random_rotation: true
+
+logging:
+  log_dir: ./logs
+  checkpoint_dir: ./checkpoints
+  save_frequency: 5
+  eval_frequency: 1
+  tensorboard: true
+
+hardware:
+  num_workers: 4
+  pin_memory: true
+  precision: fp32  # or fp16 for mixed precision
