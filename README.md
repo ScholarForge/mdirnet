@@ -1,6 +1,6 @@
 # MDIRNET: Multi-Degradation Image Restoration Network
 
-Official  implementation of **"MDIRNET: Multi-Degradation Image Restoration Network via Deep Unfolding"** submitted to IEEE Transactions on Instrumentation and Measurement.
+Official  implementation of **"MDIRNET: Multi-Degradation Image Restoration Network via Deep Unfolding"** 
 
 ---
 
