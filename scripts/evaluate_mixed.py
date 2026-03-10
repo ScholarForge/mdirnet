@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 """
 Mixed Degradation Evaluation for MDIRNET
 Tests on images with multiple simultaneous degradations:
@@ -257,4 +257,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
