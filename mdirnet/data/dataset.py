@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 import glob
+import numpy as np
 
 class DenoisingDataset(Dataset):
     """BSD68 dataset for denoising"""
@@ -108,4 +109,5 @@ def create_dataset(task, split, config):
             split=split
         )
     else:
+
         raise ValueError(f"Unknown task: {task}")
