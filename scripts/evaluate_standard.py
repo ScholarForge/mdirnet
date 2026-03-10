@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 """
 Evaluation Script for MDIRNET
 Evaluates on individual degradations:
@@ -247,4 +247,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
