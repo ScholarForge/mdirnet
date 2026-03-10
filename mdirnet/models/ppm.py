@@ -87,7 +87,7 @@ class PatchPartitioningModule(nn.Module):
         base_grid = torch.stack([grid_x, grid_y], dim=-1)  # [H, W, 2]
         base_grid = base_grid.unsqueeze(0).expand(B, -1, -1, -1)  # [B, H, W, 2]
         
-        # Step 3: Create deformed grid G_deformed = G_base + Δ
+        # Step 3: Create deformed grid 
         flow_field_permuted = flow_field.permute(0, 2, 3, 1)  # [B, H, W, 2]
         deformed_grid = base_grid + flow_field_permuted * self.sampling_temperature
         
@@ -188,10 +188,6 @@ class PatchPartitioningModule(nn.Module):
     def _group_patches_by_proximity(self, patches_dict, deformed_grid):
         """
         Group patches by spatial proximity
-        For each reference patch, collect k-1 nearest spatial neighbors
-        
-        As described in paper: "for each reference patch Pi, 
-        collect its k-1 nearest neighboring patches in the spatial domain"
         """
         patches = patches_dict['values']  # [B, N, C, P, P]
         coords = patches_dict['coordinates']  # [B, N, 2]
@@ -273,3 +269,4 @@ class PatchPartitioningModule(nn.Module):
             
 
             return density
+
