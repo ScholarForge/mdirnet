@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 """
 Training Strategy Comparison for MDIRNET
 Compares One-by-One vs All-in-One training strategies
@@ -215,3 +215,4 @@ def main():
 if __name__ == '__main__':
 
     main()
+
