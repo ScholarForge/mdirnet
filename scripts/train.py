@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 """
 Training script for MDIRNET
 """
@@ -108,4 +108,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
