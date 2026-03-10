@@ -5,11 +5,7 @@ import torch.nn.functional as F
 class PatchPartitioningModule(nn.Module):
     """
     Learnable Patch Partitioning Module (PPM)
-    
-    - Takes degraded image D ∈ R^(H×W×C)
-    - Outputs flow field Δ ∈ R^(H×W×2)
-    - Deforms regular sampling grid: G_deformed = G_base + Δ
-    - Enables content-aware patch sampling i.e., more patches in degraded regions)
+
     """
     
     def __init__(self, 
@@ -275,4 +271,5 @@ class PatchPartitioningModule(nn.Module):
                         y_coord = pixel_coords[b, i, j, 1].clamp(0, H-1)
                         density[b, y_coord, x_coord] += 1
             
+
             return density
