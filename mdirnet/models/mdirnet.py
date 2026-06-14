@@ -9,12 +9,6 @@ from .sam import SupervisedAttentionModule
 
 
 class MDIRNET(nn.Module):
-    """
-    Multi-Degradation Image Restoration Network (MDIRNET)
-
-    Unified framework for restoring images affected by multiple degradations.
-    Combines PPM, DRAM, DU-OVPCA, and SAM modules.
-    """
 
     def __init__(
         self,
@@ -197,10 +191,8 @@ class MDIRNET(nn.Module):
         B, num_patches, C, H, W = patches.shape
         groups = []
 
-       
         group_size = self.patches_per_group
 
- 
         total_needed = self.num_patch_groups * group_size
         if num_patches < total_needed:
             pad_count = total_needed - num_patches
@@ -208,7 +200,6 @@ class MDIRNET(nn.Module):
             patches = torch.cat([patches, pad_patch], dim=1)
             num_patches = patches.shape[1]
 
-     
         patches = patches[:, :total_needed, :, :, :]
 
         for i in range(self.num_patch_groups):
@@ -230,7 +221,7 @@ class MDIRNET(nn.Module):
         Returns:
             aggregated: [B, C, H, W]
         """
-        assert len(restored_groups) > 0,
+        assert len(restored_groups) > 0
 
         B = restored_groups[0].shape[0]
         C = restored_groups[0].shape[2]
@@ -244,7 +235,6 @@ class MDIRNET(nn.Module):
         patch_w = self.patch_size
         stride = self.patch_size // 2
 
-     
         max_y = max(H - patch_h, 0)
         max_x = max(W - patch_w, 0)
 
@@ -258,7 +248,6 @@ class MDIRNET(nn.Module):
                 # Learnable scalar weight per patch position
                 weight = self.aggregation_weights[patch_idx % self.patches_per_group]
 
-            
                 y = min(group_idx * stride, max_y)
                 x = min(patch_idx * stride, max_x)
 
