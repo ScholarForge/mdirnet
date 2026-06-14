@@ -97,18 +97,12 @@ MDIRNET is a unified framework for restoring images affected by multiple degrada
 
 ### Figure 4: Denoising Results on BSD68 and SIDD
 
-![Denoising Results]
-
 *Figure 4: Denoising results. Rows 1-3: synthetic Gaussian noise on BSD68. Row 4: real sensor noise from SIDD dataset.*
 
 ### Figure 5: Deraining Results on Rain100L
 
-![Deraining Results]
-
 *Figure 5: Deraining results on Rain100L dataset. From left to right: Rainy input, MDIRNET output, Ground truth.*
 
 ### Figure 6: Deblurring Results on GoPro
-
-![Deblurring Results]
 
 *Figure 6: Deblurring results on GoPro dataset. From left to right: Blurry input, MDIRNET output, Ground truth.*
