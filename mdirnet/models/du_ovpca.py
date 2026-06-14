@@ -58,7 +58,6 @@ class OVPCAIteration(nn.Module):
         """
         B = D.shape[0]
 
-       
         omega_col = omega.unsqueeze(-1)
 
         # Update basis scaling factors
@@ -117,7 +116,6 @@ class DUOVPCA(nn.Module):
         self.init_k = nn.Parameter(torch.ones(1, max_rank) * 0.1)
         self.init_omega = nn.Parameter(torch.tensor(1.0))
 
-   
         self.refine = nn.Sequential(
             nn.Conv2d(out_channels, 64, 3, padding=1),
             nn.ReLU(inplace=True),
@@ -154,7 +152,6 @@ class DUOVPCA(nn.Module):
         B, T, C, H, W = patch_group.shape
         device = patch_group.device
 
-        
         if isinstance(rank, int):
             rank = torch.full((B,), rank, device=device, dtype=torch.long)
         elif isinstance(rank, torch.Tensor):
@@ -174,7 +171,6 @@ class DUOVPCA(nn.Module):
         # Build patch-group matrix D: [B, M, T], M = C*H*W
         D = patch_group.reshape(B, T, C * H * W).permute(0, 2, 1).contiguous()
 
-   
         U_r, S_r, V_r = self._svd(D, r_max)   # U_r:[B,M,r_max], S_r:[B,r_max], V_r:[B,T,r_max]
         l_r = S_r[:, :r_max]
 
@@ -183,7 +179,6 @@ class DUOVPCA(nn.Module):
             torch.arange(r_max, device=device).unsqueeze(0) < rank.unsqueeze(1)
         ).float()
 
-   
         k_A = self.init_k[:, :r_max].expand(B, -1).clone()
         k_X = self.init_k[:, :r_max].expand(B, -1).clone()
         l_hat = l_r.clone()
@@ -204,14 +199,11 @@ class DUOVPCA(nn.Module):
             k_X = k_X * rank_mask
             l_hat = l_hat * rank_mask
 
-      
         k_A = k_A * rank_mask
         k_X = k_X * rank_mask
         l_hat = l_hat * rank_mask
 
-        # Reconstruction:
-        # D_rec = U diag(k_A) diag(l_hat) diag(k_X) V^T
-       
+        # Reconstruction: D_rec = U diag(k_A) diag(l_hat) diag(k_X) V^T
         diag_vals = k_A * l_hat * k_X   # [B, r_max]
 
         # Scale U by diagonal values
