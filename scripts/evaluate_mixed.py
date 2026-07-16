@@ -1,261 +1,216 @@
 
-"""
-Mixed Degradation Evaluation for MDIRNET
-Tests on images with multiple simultaneous degradations:
-- Rain + Noise
-- Blur + Noise
-- Rain + Blur
-- Rain + Blur + Noise (all three)
-"""
-
+import argparse
 import torch
 import torch.nn.functional as F
 import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
 import time
 import sys
 import os
 from PIL import Image
 import glob
-import json
-from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mdirnet.models import MDIRNET
 from mdirnet.utils.metrics import psnr, ssim
+from mdirnet.utils import profile_model
 
 
-class MixedEvaluator:
-    """Evaluate MDIRNET on mixed degradations"""
-    
-    def __init__(self, model, device, results_dir='mixed_results'):
-        self.model = model
-        self.device = device
-        self.results_dir = Path(results_dir)
-        self.results_dir.mkdir(exist_ok=True)
-        self.figures_dir = self.results_dir / 'figures'
-        self.figures_dir.mkdir(exist_ok=True)
-        
-        self.results = {
-            'rain_noise': {},
-            'blur_noise': {},
-            'rain_blur': {},
-            'rain_blur_noise': {}
-        }
-    
-    def load_clean_images(self, data_dir='data/BSD68', num_images=5):
-        """Load clean images from BSD68"""
-        clean_dir = os.path.join(data_dir, 'clean')
-        if not os.path.exists(clean_dir):
-            return None
-        
-        files = sorted(glob.glob(os.path.join(clean_dir, '*.png')))[:num_images]
-        clean = []
-        for f in files:
-            img = np.array(Image.open(f).convert('RGB')) / 255.0
-            clean.append(torch.from_numpy(img).float().permute(2,0,1))
-        
-        return torch.stack(clean) if clean else None
-    
-    def add_noise(self, images, sigma=25):
-        """Add Gaussian noise"""
-        noise = torch.randn_like(images) * (sigma / 255.0)
-        return (images + noise).clamp(0, 1)
-    
-    def add_blur(self, images, kernel_size=11, sigma=1.5):
-        """Add Gaussian blur"""
-        # Simple blur via averaging
-        blurred = []
-        kernel = torch.ones(1,1,kernel_size,kernel_size) / (kernel_size*kernel_size)
-        kernel = kernel.to(images.device)
-        
-        for i in range(images.shape[0]):
-            img = images[i:i+1]
-            blurred.append(F.conv2d(img, kernel.repeat(3,1,1,1), padding=kernel_size//2, groups=3))
-        
-        return torch.cat(blurred, dim=0)
-    
-    def add_rain(self, images, num_streaks=20, intensity=0.3):
-        """Add synthetic rain streaks"""
-        rainy = images.clone()
-        B, C, H, W = images.shape
-        
-        for b in range(B):
-            for _ in range(num_streaks):
-                x = np.random.randint(0, W-20)
-                y = np.random.randint(0, H-20)
-                rainy[b, :, y:y+15, x:x+2] += intensity
-        
-        return rainy.clamp(0, 1)
-    
-    def create_mixed(self, clean):
-        """Create all mixed degradation types"""
-        clean = clean.to(self.device)
-        
-        mixed = {
-            'rain_noise': self.add_noise(self.add_rain(clean, num_streaks=20), sigma=15),
-            'blur_noise': self.add_noise(self.add_blur(clean, kernel_size=9), sigma=15),
-            'rain_blur': self.add_blur(self.add_rain(clean, num_streaks=20), kernel_size=9),
-            'rain_blur_noise': self.add_noise(
-                self.add_blur(self.add_rain(clean, num_streaks=25), kernel_size=9), 
-                sigma=20
-            )
-        }
-        
-        return mixed, clean
-    
-    def evaluate_mixed(self, degraded, clean, name):
-        """Evaluate on one mixed type"""
-        degraded = degraded.to(self.device)
-        clean = clean.to(self.device)
-        
-        psnr_vals, ssim_vals, times = [], [], []
-        samples = []
-        
-        with torch.no_grad():
-            for i in range(len(clean)):
-                inp = degraded[i:i+1]
-                gt = clean[i:i+1]
-                
-                # Time inference
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                    start = time.time()
-                    out = self.model(inp)
-                    torch.cuda.synchronize()
-                    end = time.time()
-                else:
-                    start = time.time()
-                    out = self.model(inp)
-                    end = time.time()
-                
-                psnr_vals.append(psnr(out, gt))
-                ssim_vals.append(ssim(out, gt))
-                times.append((end - start) * 1000)
-                
-                if i < 3:
-                    samples.append({
-                        'degraded': inp.cpu(),
-                        'restored': out.cpu(),
-                        'clean': gt.cpu(),
-                        'psnr': psnr_vals[-1],
-                        'ssim': ssim_vals[-1]
-                    })
-                
-                print(f"      Image {i+1}: PSNR={psnr_vals[-1]:.2f}dB")
-        
-        return {
-            'psnr': np.mean(psnr_vals),
-            'ssim': np.mean(ssim_vals),
-            'time': np.mean(times),
-            'samples': samples
-        }
-    
-    def run_evaluation(self, num_images=5):
-        """Run all mixed evaluations"""
-        print("\n" + "="*70)
-        print(" "*15 + "MIXED DEGRADATION EVALUATION")
-        print("="*70)
-        
-        # Load clean images
-        clean = self.load_clean_images(num_images=num_images)
-        if clean is None:
-            print("No clean images found")
-            return
-        
-        mixed, clean = self.create_mixed(clean)
-        
-        # Evaluate each type
-        for name, deg in mixed.items():
-            print(f"\nEvaluating: {name.replace('_', ' + ').upper()}")
-            print("-"*50)
-            self.results[name] = self.evaluate_mixed(deg, clean, name)
-            print(f"   → PSNR: {self.results[name]['psnr']:.2f} dB")
-        
-        return self.results
-    
-    def generate_figures(self):
-        """Generate figures for each mixed type"""
-        for name, res in self.results.items():
-            if not res or 'samples' not in res:
-                continue
-            
-            samples = res['samples']
-            fig, axes = plt.subplots(len(samples), 3, figsize=(10, 3*len(samples)))
-            
-            if len(samples) == 1:
-                axes = axes.reshape(1, -1)
-            
-            for i in range(len(samples)):
-                s = samples[i]
-                
-                # Degraded
-                axes[i,0].imshow(np.clip(s['degraded'][0].permute(1,2,0).numpy(), 0, 1))
-                axes[i,0].set_title('Input', fontsize=10)
-                axes[i,0].axis('off')
-                
-                # Restored
-                axes[i,1].imshow(np.clip(s['restored'][0].permute(1,2,0).numpy(), 0, 1))
-                axes[i,1].set_title(f'MDIRNET\n{s["psnr"]:.2f}dB', fontsize=10)
-                axes[i,1].axis('off')
-                
-                # Clean
-                axes[i,2].imshow(np.clip(s['clean'][0].permute(1,2,0).numpy(), 0, 1))
-                axes[i,2].set_title('Ground Truth', fontsize=10)
-                axes[i,2].axis('off')
-            
-            title = name.replace('_', ' + ').upper()
-            plt.suptitle(f'Mixed Degradation: {title}', fontsize=12)
-            plt.tight_layout()
-            plt.savefig(self.figures_dir / f'mixed_{name}.png', dpi=300, bbox_inches='tight')
-            plt.close()
-    
-    def save_results(self):
-        """Save results to file"""
-        with open(self.results_dir / 'mixed_summary.txt', 'w') as f:
-            f.write("="*50 + "\n")
-            f.write("MDIRNET MIXED DEGRADATION RESULTS\n")
-            f.write(f"Date: {datetime.now()}\n")
-            f.write("="*50 + "\n\n")
-            
-            for name, res in self.results.items():
-                if res:
-                    f.write(f"{name.replace('_', ' + ').upper()}:\n")
-                    f.write(f"  PSNR: {res['psnr']:.2f} dB\n")
-                    f.write(f"  SSIM: {res['ssim']:.4f}\n")
-                    f.write(f"  Time: {res['time']:.2f} ms\n\n")
+def add_noise(images, sigma=25):
+    noise = torch.randn_like(images) * (sigma / 255.0)
+    return (images + noise).clamp(0, 1)
+
+
+def add_blur(images, kernel_size=11):
+    c = images.shape[1]
+    kernel = torch.ones(
+        c, 1, kernel_size, kernel_size,
+        device=images.device
+    ) / (kernel_size ** 2)
+
+    return F.conv2d(
+        images,
+        kernel,
+        padding=kernel_size // 2,
+        groups=c
+    )
+
+
+def add_rain(images, num_streaks=20, intensity=0.3):
+    rainy = images.clone()
+    b, c, h, w = images.shape
+
+    for i in range(b):
+        for _ in range(num_streaks):
+            x = np.random.randint(0, max(w - 20, 1))
+            y = np.random.randint(0, max(h - 20, 1))
+            rainy[i, :, y:y+15, x:x+2] += intensity
+
+    return rainy.clamp(0, 1)
+
+
+def load_clean_images(data_dir, num_images=None):
+    clean_dir = os.path.join(data_dir, "clean")
+
+    if not os.path.exists(clean_dir):
+        return None
+
+    files = sorted(glob.glob(os.path.join(clean_dir, "*.png")))
+
+    if num_images:
+        files = files[:num_images]
+
+    images = []
+
+    for f in files:
+        img = np.array(
+            Image.open(f).convert("RGB"),
+            dtype=np.float32
+        ) / 255.0
+
+        images.append(
+            torch.from_numpy(img).permute(2, 0, 1)
+        )
+
+    return torch.stack(images) if images else None
+
+
+def evaluate_mixed(model, degraded, clean, device, num_warmup=10):
+
+    degraded = degraded.to(device)
+    clean = clean.to(device)
+
+    psnr_vals = []
+    ssim_vals = []
+    times = []
+
+    model.eval()
+
+    with torch.inference_mode():
+
+        for _ in range(num_warmup):
+            _ = model(degraded[0:1])
+
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+
+        for i in range(len(clean)):
+
+            inp = degraded[i:i+1]
+            gt = clean[i:i+1]
+
+            if device.type == "cuda":
+
+                starter = torch.cuda.Event(enable_timing=True)
+                ender = torch.cuda.Event(enable_timing=True)
+
+                starter.record()
+                out = model(inp)
+                ender.record()
+
+                torch.cuda.synchronize()
+
+                elapsed = starter.elapsed_time(ender) / 1000.0
+
+            else:
+
+                start = time.time()
+                out = model(inp)
+                elapsed = time.time() - start
+
+            psnr_vals.append(psnr(out, gt))
+            ssim_vals.append(ssim(out, gt))
+            times.append(elapsed)
+
+    return {
+        "psnr": np.mean(psnr_vals),
+        "ssim": np.mean(ssim_vals),
+        "time": np.median(times),
+    }
 
 
 def main():
-    print("\n" + "="*70)
-    print(" "*15 + "MDIRNET MIXED DEGRADATION")
-    print("="*70)
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"\nDevice: {device}")
-    
-    # Load model
-    model = MDIRNET(
-        in_channels=3, patch_size=64, num_patch_groups=8,
-        patches_per_group=16, num_ovpca_iterations=6,
-        dram_min_rank=4, dram_max_rank=32
-    ).to(device)
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--data_dir", type=str, default="data/BSD68")
+    parser.add_argument("--num_images", type=int, default=10)
+    parser.add_argument("--device", type=str, default="cuda")
+
+    args = parser.parse_args()
+
+    device = torch.device(
+        args.device if torch.cuda.is_available() else "cpu"
+    )
+
+    model = MDIRNET().to(device)
+
+    checkpoint = torch.load(
+        args.checkpoint,
+        map_location=device
+    )
+
+    model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    
-    # Evaluate
-    evaluator = MixedEvaluator(model, device)
-    evaluator.run_evaluation(num_images=5)
-    evaluator.generate_figures()
-    evaluator.save_results()
-    
-    print("\n" + "="*70)
-    print(" "*15 + "EVALUATION COMPLETE")
-    print("="*70)
-    print(f"\n Results in: {evaluator.results_dir}")
+
+    params, flops = profile_model(
+        model,
+        input_size=(1, 3, 256, 256)
+    )
+
+    print("\n========== Model Profile ==========")
+    print(f"Parameters : {params/1e6:.2f} M")
+    print(f"GFLOPs     : {flops/1e9:.2f}")
+    print("===================================\n")
+
+    clean = load_clean_images(
+        args.data_dir,
+        args.num_images
+    )
+
+    if clean is None:
+        print("No clean images found.")
+        return
+
+    clean = clean.to(device)
+
+    combinations = {
+        "Noise + Rain":
+            lambda x: add_noise(add_rain(x), sigma=25),
+
+        "Noise + Blur":
+            lambda x: add_noise(add_blur(x), sigma=25),
+
+        "Rain + Blur":
+            lambda x: add_blur(add_rain(x)),
+
+        "Noise + Rain + Blur":
+            lambda x: add_noise(add_blur(add_rain(x)), sigma=25),
+    }
+
+    print(f"Evaluating {len(clean)} images...\n")
+
+    for name, degrade_fn in combinations.items():
+
+        degraded = degrade_fn(clean)
+
+        results = evaluate_mixed(
+            model,
+            degraded,
+            clean,
+            device
+        )
+
+        fps = 1.0 / results["time"]
+
+        print(f"{name}")
+        print(f"  PSNR   : {results['psnr']:.2f} dB")
+        print(f"  SSIM   : {results['ssim']:.4f}")
+        print(f"  Time   : {results['time']:.4f} s")
+        print(f"  FPS    : {fps:.2f}")
+        print()
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     main()
