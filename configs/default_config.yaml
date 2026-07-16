@@ -1,0 +1,62 @@
+model:
+  in_channels: 3
+  patch_size: 8
+  num_patch_groups: 512
+  patches_per_group: 8
+  num_ovpca_iterations: 6
+  dram_min_rank: 4
+  dram_max_rank: 32
+  use_ppm: true
+  use_dram: true
+  use_sam: true
+
+training:
+  batch_size: 4
+  num_epochs: 100
+  learning_rate: 0.0001
+  min_learning_rate: 0.0000001
+  weight_decay: 0.0001
+  optimizer: adamw
+  beta1: 0.9
+  beta2: 0.999
+  scheduler: cosine
+
+  loss:
+    lambda_rec: 1.0
+    lambda_unc: 0.1
+    alpha_l2: 0.5
+
+data:
+  crop_size: 64
+
+  denoising:
+    datasets: [data/BSD400, data/WED]
+    noise_levels: [25, 50]
+
+  deraining:
+    datasets: [data/Rain100L]
+
+  deblurring:
+    datasets: [data/GoPro]
+
+  augmentation:
+    random_crop: true
+    random_flip: true
+    random_rotation: true
+
+eval:
+  denoising:
+    datasets: [data/BSD68, data/Urban100, data/DIV2K, data/SIDD]
+    noise_levels: [25, 50]
+
+  deraining:
+    datasets: [data/Rain100L]
+
+  deblurring:
+    datasets: [data/GoPro]
+
+checkpoint_dir: ./checkpoints
+
+hardware:
+  num_workers: 4
+  pin_memory: true
